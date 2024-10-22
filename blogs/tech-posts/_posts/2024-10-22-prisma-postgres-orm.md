@@ -58,7 +58,7 @@ This will generate the following files:
 
 In your **`prisma/schema.prisma`** file, configure Prisma to use PostgreSQL as the data source:
 
-```json
+```prisma
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -92,7 +92,7 @@ If you are using a hosted service (like Railway or Supabase), you can find the c
 
 Let’s create an example data model. Open **`prisma/schema.prisma`** and add the following:
 
-```json
+```prisma
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -196,7 +196,7 @@ With your environment set up and the Prisma Client ready, you’re all set to st
 
 Example schema for a blogging platform:
 
-```json
+```prisma
 model User {
   id        Int      @id @default(autoincrement())
   email     String   @unique
@@ -220,146 +220,409 @@ model Post {
 npx prisma generate
 ```
 
+## **3. Efficient Database Queries Using Prisma**
+
+Prisma makes it easy to perform CRUD (Create, Read, Update, Delete) operations, but writing **optimized queries** is crucial to ensure high performance as your database grows. In this section, we’ll cover how to structure queries efficiently with Prisma, along with techniques like pagination, filtering, and relation handling.
+
 ---
 
-### **3. Efficient Database Queries Using Prisma**
+### **3.1. Basic Queries**
 
-#### **3.1. Basic Queries**
+#### **Fetching All Records**
 
-- **Fetching All Records**:
+You can fetch all records from a table using `findMany`:
+
+```javascript
+const posts = await prisma.post.findMany();
+console.log(posts);
+```
+
+However, retrieving all rows can become expensive as the dataset grows. It’s often better to filter results or retrieve only specific fields.
+
+#### **Filtering with Conditions**
+
+You can add conditions to your queries with the `where` clause:
+
+```javascript
+const publishedPosts = await prisma.post.findMany({
+  where: { published: true },
+});
+console.log(publishedPosts);
+```
+
+This query fetches only the posts that are marked as published.
+
+#### **Sorting Results**
+
+Use the `orderBy` option to sort results:
+
+```javascript
+const recentPosts = await prisma.post.findMany({
+  orderBy: { createdAt: "desc" },
+});
+```
+
+This fetches posts in descending order of their creation date.
+
+---
+
+### **3.2. Handling Relationships Efficiently**
+
+#### **Eager Loading (Using `include`)**
+
+To fetch related data in a single query, use the `include` option:
+
+```javascript
+const usersWithPosts = await prisma.user.findMany({
+  include: { posts: true },
+});
+```
+
+This query returns users along with their associated posts. While `include` is convenient, use it cautiously with large datasets to avoid performance bottlenecks.
+
+#### **Lazy Loading (Using Separate Queries)**
+
+If related data is not always needed, it’s more efficient to fetch it separately:
+
+```javascript
+const user = await prisma.user.findUnique({ where: { id: 1 } });
+const posts = await prisma.post.findMany({ where: { authorId: user.id } });
+```
+
+This approach keeps queries smaller and reduces unnecessary data loading.
+
+---
+
+### **3.3. Selecting Specific Fields**
+
+If you only need a few fields from a model, use the `select` option to improve performance by avoiding large payloads:
+
+```javascript
+const postTitles = await prisma.post.findMany({
+  select: { title: true },
+});
+console.log(postTitles);
+```
+
+This query returns only the `title` field of each post, reducing the amount of data transferred.
+
+---
+
+### **3.4. Paginating Large Datasets**
+
+Pagination helps manage large datasets by retrieving data in chunks. Use `skip` and `take` for simple pagination:
+
+```javascript
+const paginatedPosts = await prisma.post.findMany({
+  skip: 0, // Start from the first result
+  take: 10, // Limit to 10 posts
+});
+```
+
+This query fetches the first 10 posts. Adjust the `skip` value to implement a "Load More" or "Next Page" feature.
+
+---
+
+### **3.5. Filtering with Complex Conditions**
+
+Prisma allows complex filters using logical operators like `AND`, `OR`, and `NOT`:
+
+```javascript
+const filteredPosts = await prisma.post.findMany({
+  where: {
+    AND: [{ published: true }, { title: { contains: "Prisma" } }],
+  },
+});
+```
+
+This query fetches only published posts that contain the word "Prisma" in the title.
+
+---
+
+### **3.6. Batch Fetching with `in` Clause**
+
+Fetching multiple records by a list of IDs or values is faster using the `in` operator:
+
+```javascript
+const postsByAuthors = await prisma.post.findMany({
+  where: { authorId: { in: [1, 2, 3] } },
+});
+```
+
+This query retrieves posts authored by users with IDs 1, 2, and 3, reducing the need for multiple queries.
+
+---
+
+### **3.7. Aggregations and Counting Records**
+
+Prisma supports basic aggregation functions like `count`, `avg`, `sum`, `min`, and `max` to summarize data.
+
+- **Counting Records**:
 
   ```javascript
-  const posts = await prisma.post.findMany();
-  console.log(posts);
-  ```
-
-- **Filtering with Conditions**:
-
-  ```javascript
-  const publishedPosts = await prisma.post.findMany({
+  const postCount = await prisma.post.count({
     where: { published: true },
   });
+  console.log(`Published posts: ${postCount}`);
   ```
 
-- **Fetching Related Data** (With Relations):
+- **Calculating Averages**:
   ```javascript
-  const usersWithPosts = await prisma.user.findMany({
-    include: { posts: true },
+  const averageLikes = await prisma.post.aggregate({
+    _avg: { likes: true },
   });
+  console.log(`Average Likes: ${averageLikes._avg.likes}`);
   ```
 
-#### **3.2. Optimizing Queries for Performance**
-
-- **Using `select` to Fetch Only Required Fields**:
-
-  ```javascript
-  const postTitles = await prisma.post.findMany({
-    select: { title: true },
-  });
-  ```
-
-- **Pagination and Limiting Results**:
-
-  ```javascript
-  const paginatedPosts = await prisma.post.findMany({
-    skip: 0,
-    take: 10,
-  });
-  ```
-
-- **Batching Queries Using `findMany` with `in` Clause**:
-  ```javascript
-  const postsByAuthors = await prisma.post.findMany({
-    where: { authorId: { in: [1, 2, 3] } },
-  });
-  ```
+Aggregations are helpful for reporting and analytics purposes.
 
 ---
 
-### **4. Handling Transactions in Prisma**
+### **3.8. Optimizing with Query Logging and Indexing**
 
-#### **4.1. Using `prisma.$transaction` for Multiple Queries**
+#### **Enable Query Logging for Performance Insights**
 
-- **When to Use Transactions**: Explain the importance of atomicity for operations like creating a user and their associated posts simultaneously.
+Enable Prisma query logging to monitor which queries are being executed:
 
-- **Basic Transaction Example**:
+```javascript
+const prisma = new PrismaClient({
+  log: ["query", "info", "warn", "error"],
+});
+```
 
-  ```javascript
-  await prisma.$transaction(async (prisma) => {
-    const user = await prisma.user.create({
-      data: { email: "test@example.com", name: "Test User" },
-    });
+This can help identify slow queries that may need optimization.
 
-    await prisma.post.create({
-      data: {
-        title: "First Post",
-        content: "Hello world!",
-        authorId: user.id,
-      },
-    });
-  });
-  ```
+#### **Leverage PostgreSQL Indexing for Faster Queries**
 
-#### **4.2. Save Time with Batched Writes**
+For columns that are frequently filtered or sorted (like `email` or `createdAt`), adding a database index can speed up queries. In PostgreSQL, you can create an index like this:
 
-- **Example of Batched Write Operations**:
-  ```javascript
-  await prisma.$transaction([
-    prisma.user.create({ data: { email: "user1@example.com" } }),
-    prisma.user.create({ data: { email: "user2@example.com" } }),
-  ]);
-  ```
+```sql
+CREATE INDEX idx_email ON "User" (email);
+```
 
-#### **4.3. Error Handling in Transactions**
+This makes queries like `findUnique` by email much faster.
 
-- **Catching Errors Gracefully**:
-  ```javascript
+---
+
+### **3.9. Error Handling and Query Timeouts**
+
+#### **Handle Query Errors Gracefully**
+
+Always wrap your queries in `try-catch` blocks to handle unexpected errors:
+
+```javascript
+try {
+  const user = await prisma.user.findUnique({ where: { id: 1 } });
+  if (!user) throw new Error("User not found");
+  console.log(user);
+} catch (error) {
+  console.error("Query failed:", error.message);
+}
+```
+
+#### **Set Query Timeouts for Long Queries**
+
+Use PostgreSQL’s query timeout feature to prevent long-running queries from blocking the system:
+
+```javascript
+const prisma = new PrismaClient({
+  datasources: { db: { url: process.env.DATABASE_URL + "?statement_timeout=5000" } },
+});
+```
+
+This sets a 5-second timeout for queries, ensuring that slow queries don’t hang indefinitely.
+
+---
+
+### **3.10. Summary of Best Practices for Prisma Queries**
+
+- **Use `select` to fetch only necessary fields**.
+- **Paginate large datasets** to avoid overwhelming the database.
+- **Avoid unnecessary `include` operations**—fetch related data only when needed.
+- **Batch fetch with `in` clauses** to reduce multiple round-trips to the database.
+- **Add indexes** to frequently queried columns in PostgreSQL for faster lookups.
+- **Enable query logging** to identify and optimize slow queries.
+
+With these techniques, you can write **efficient and optimized database queries** using Prisma, ensuring your application performs well even as your data grows. In the next section, we’ll explore **handling transactions with Prisma** to manage multiple queries safely and consistently.
+
+## **4. Handling Transactions in Prisma**
+
+When working with relational databases like PostgreSQL, transactions are crucial to ensure **data consistency** and **integrity**. A **transaction** allows multiple database operations to be executed as a single unit of work—if any operation fails, all other operations are rolled back, leaving the database unchanged. Prisma provides easy-to-use transactional APIs, including simple transactions and advanced interactive transactions. Let’s explore how to handle them efficiently.
+
+---
+
+### **4.1. What is a Database Transaction?**
+
+A transaction ensures that a group of operations is executed **atomically**—either all operations succeed or none of them are applied. This is important in scenarios such as:
+
+- Creating a user and associated records (like a profile) together.
+- Processing payments and updating multiple tables atomically.
+- Ensuring consistency when modifying multiple related tables.
+
+---
+
+### **4.2. Using Prisma’s Simple Transactions**
+
+Prisma provides a straightforward way to execute transactions using the **`prisma.$transaction()`** method. This method ensures that either **all queries are committed** or **none of them are applied**. Here’s an example of a simple transaction.
+
+#### **Example: Creating a User with Posts**
+
+```javascript
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
+
+async function createUserWithPosts() {
   try {
-    await prisma.$transaction(async (prisma) => {
-      // Your logic here
-    });
+    const result = await prisma.$transaction([
+      prisma.user.create({
+        data: {
+          email: "john@example.com",
+          name: "John",
+        },
+      }),
+      prisma.post.create({
+        data: {
+          title: "My first post",
+          content: "Hello World!",
+          author: { connect: { email: "john@example.com" } },
+        },
+      }),
+    ]);
+    console.log("Transaction successful:", result);
   } catch (error) {
     console.error("Transaction failed:", error);
+  } finally {
+    await prisma.$disconnect();
   }
-  ```
+}
+
+createUserWithPosts();
+```
+
+In this example:
+
+1. A user is created.
+2. A post linked to that user is created.
+3. If either operation fails (e.g., a duplicate email), the entire transaction is rolled back.
 
 ---
 
-### **5. Tips for Writing Efficient Queries with Prisma**
+### **4.3. Handling Interactive Transactions**
 
-1. **Use Lazy Loading (Avoid `include` if not needed)** – Only load related data when absolutely necessary.
-2. **Leverage Database Indexes** – Add indexes to frequently queried columns in PostgreSQL to speed up lookups.
-3. **Use Aggregate Functions Efficiently**:
-   ```javascript
-   const count = await prisma.post.count({
-     where: { published: true },
-   });
-   ```
-4. **Optimize Long Transactions** – Minimize the duration of transactions to reduce lock contention.
-5. **Monitor and Analyze Queries** – Use PostgreSQL tools like `pg_stat_statements` to track slow queries.
+Sometimes you need more control over the flow of operations, such as conditional logic or multiple steps within a transaction. For these cases, Prisma offers **interactive transactions** using a callback function.
+
+#### **Example: Transferring Funds Between Users**
+
+```javascript
+async function transferFunds(senderId, receiverId, amount) {
+  try {
+    await prisma.$transaction(async (prisma) => {
+      const sender = await prisma.user.update({
+        where: { id: senderId },
+        data: { balance: { decrement: amount } },
+      });
+
+      if (sender.balance < 0) {
+        throw new Error("Insufficient funds");
+      }
+
+      await prisma.user.update({
+        where: { id: receiverId },
+        data: { balance: { increment: amount } },
+      });
+
+      console.log("Transaction successful");
+    });
+  } catch (error) {
+    console.error("Transaction failed:", error.message);
+  }
+}
+```
+
+In this example:
+
+- The sender’s balance is decremented.
+- If the sender’s balance goes negative, the transaction is rolled back.
+- Otherwise, the receiver’s balance is incremented.
+
+Interactive transactions give you the flexibility to execute multiple queries and include conditional logic, ensuring complex operations succeed or fail as a whole.
 
 ---
 
-### **6. Debugging and Performance Monitoring**
+### **4.4. Nested Transactions and Savepoints**
 
-- **Enabling Prisma Query Logs**:
+Prisma supports **nested transactions**, which allow you to divide a large transaction into smaller parts. These smaller transactions act as **savepoints**—if a specific part fails, only that part is rolled back, without affecting the whole transaction.
 
-  ```javascript
-  const prisma = new PrismaClient({
-    log: ["query", "info", "warn", "error"],
-  });
-  ```
+#### **Example: Nested Transactions (Coming Soon)**
 
-- **Using PostgreSQL Query Analysis Tools**:
-  - `EXPLAIN ANALYZE` to check query execution plans.
-  - Monitor with Prisma Studio:
-    ```bash
-    npx prisma studio
-    ```
+At the time of writing, full nested transactions are not supported in Prisma, but this feature is on the roadmap. Once implemented, it will allow partial rollbacks, useful for complex workflows.
 
 ---
 
-### **7. Conclusion**
+### **4.5. Handling Long-Running Transactions**
+
+By default, long-running transactions can lock resources and impact performance. PostgreSQL can enforce **timeout limits** for transactions to prevent deadlocks.
+
+You can configure a **statement timeout** in the `.env` file:
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/mydb?statement_timeout=5000"
+```
+
+This sets a 5-second timeout for each query, ensuring the system doesn’t hang on long-running operations.
+
+---
+
+### **4.6. Error Handling and Rollbacks**
+
+When using transactions, it’s essential to handle errors gracefully to prevent partial data from being committed. Prisma automatically rolls back transactions when an error is thrown, but you should still wrap your code in **try-catch** blocks to handle issues.
+
+#### **Example: Graceful Error Handling**
+
+```javascript
+async function createOrder() {
+  try {
+    await prisma.$transaction(async (prisma) => {
+      const order = await prisma.order.create({ data: { total: 100 } });
+      throw new Error("Something went wrong!"); // Simulate failure
+      await prisma.payment.create({ data: { orderId: order.id, status: "paid" } });
+    });
+  } catch (error) {
+    console.error("Transaction rolled back:", error.message);
+  }
+}
+```
+
+In this example:
+
+- The order is created, but an error is thrown before the payment is processed.
+- The transaction is rolled back, ensuring no incomplete data remains in the database.
+
+---
+
+### **4.7. Best Practices for Using Transactions in Prisma**
+
+- **Use transactions for critical operations** where partial success is not acceptable (e.g., financial transactions).
+- **Keep transactions short** to minimize resource locking and improve performance.
+- **Use interactive transactions** for complex workflows with multiple steps and conditional logic.
+- **Monitor transaction errors** with proper logging to identify issues early.
+- **Test transaction scenarios thoroughly** to ensure data consistency across edge cases.
+
+---
+
+### **4.8. Summary of Transactions in Prisma**
+
+Prisma makes it easy to work with **transactions**, ensuring **atomicity and consistency** in your database operations. Whether you're handling simple CRUD operations or complex workflows involving multiple queries, Prisma’s transaction APIs provide a powerful and flexible way to maintain data integrity. With **interactive transactions**, you can incorporate business logic within transactions, ensuring that only valid operations are committed.
+
+---
+
+### **5. Conclusion**
+
+Prisma, when combined with PostgreSQL, offers a powerful, type-safe, and developer-friendly way to interact with your database. By leveraging Prisma’s modern ORM features, you can write clean and efficient code without the hassle of managing raw SQL queries. Whether you are performing simple CRUD operations or working with complex relationships, Prisma makes database interaction intuitive
+
+With these insights, you’re now equipped to build robust applications that can scale effortlessly while keeping the database layer well-organized and efficient. Prisma, with its type-safe approach and elegant syntax, empowers developers to maintain both speed and reliability, ensuring your backend is ready to meet the demands of modern applications.
+
+Happy coding!
 
 ---
 
